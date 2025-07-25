@@ -65,14 +65,14 @@ type CategoryRefreshStatus struct {
 }
 
 type GagStockResponse struct {
-	EasterStock           StockItemList         `json:"easterStock"`
-	GearStock             StockItemList         `json:"gearStock"`
-	EggStock              StockItemList         `json:"eggStock"`
-	NightStock            StockItemList         `json:"nightStock"`
-	EventStock            StockItemList         `json:"eventStock"`
-	CosmeticsStock        StockItemList         `json:"cosmeticsStock"`
-	SeedsStock            StockItemList         `json:"seedsStock"`
-	MerchantsStock        StockItemList         `json:"merchantsStock"`
+	Easter                StockItemList         `json:"easterStock"`
+	Gear                  StockItemList         `json:"gearStock"`
+	Egg                   StockItemList         `json:"eggStock"`
+	Night                 StockItemList         `json:"nightStock"`
+	Event                 StockItemList         `json:"eventStock"`
+	Cosmetics             StockItemList         `json:"cosmeticsStock"`
+	Seeds                 StockItemList         `json:"seedsStock"`
+	Merchants             StockItemList         `json:"merchantsStock"`
 	LastSeen              []LastSeenItem        `json:"lastSeen"`
 	RestockTimers         RestockTimers         `json:"restockTimers"`
 	CategoryRefreshStatus CategoryRefreshStatus `json:"categoryRefreshStatus"`
@@ -94,55 +94,53 @@ func (g *GagStockResponse) GetLastRestockTimes() LastRestockTimes {
 	}
 }
 
-func (g *GagStockResponse) CheckStock(wantedItems []string, lastRestockTimes LastRestockTimes, force bool) ([]string, error) {
+func (g GagStockResponse) CheckStock(wantedItems []string) ([]string, error) {
 	foundItems := []string{}
 
-	times := g.GetLastRestockTimes()
-
 	for _, item := range wantedItems {
-		stockItem := g.SeedsStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Seeds < times.Seeds || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.GearStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Gears < times.Gears || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.EggStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Eggs < times.Eggs || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.MerchantsStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Merchants < times.Merchants || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.CosmeticsStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Cosmetics < times.Cosmetics || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.EventStock.GetItem(item)
-		if stockItem != nil && stockItem.Value > 0 && (lastRestockTimes.Event < times.Event || force) {
-			foundItems = append(foundItems, item)
-			continue
-		}
-
-		stockItem = g.NightStock.GetItem(item)
+		stockItem := g.Seeds.GetItem(item)
 		if stockItem != nil && stockItem.Value > 0 {
 			foundItems = append(foundItems, item)
 			continue
 		}
 
-		stockItem = g.EasterStock.GetItem(item)
+		stockItem = g.Gear.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Egg.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Merchants.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Cosmetics.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Event.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Night.GetItem(item)
+		if stockItem != nil && stockItem.Value > 0 {
+			foundItems = append(foundItems, item)
+			continue
+		}
+
+		stockItem = g.Easter.GetItem(item)
 		if stockItem != nil && stockItem.Value > 0 {
 			foundItems = append(foundItems, item)
 			continue
@@ -153,22 +151,22 @@ func (g *GagStockResponse) CheckStock(wantedItems []string, lastRestockTimes Las
 }
 
 // GetGagStock fetches the stock data from the Grow a Garden API and decodes it into GagStockResponse.
-func GetGagStock() (*GagStockResponse, error) {
+func GetGagStock() (GagStockResponse, error) {
 	const url = "https://growagarden.gg/api/stock"
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch stock: %w", err)
+		return GagStockResponse{}, fmt.Errorf("failed to fetch stock: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return GagStockResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	var stock GagStockResponse
 	if err := json.NewDecoder(resp.Body).Decode(&stock); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return GagStockResponse{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return &stock, nil
+	return stock, nil
 }

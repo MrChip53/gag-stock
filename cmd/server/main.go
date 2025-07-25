@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gen2brain/beeep"
 	"github.com/mrchip53/go-a-garden/pkg/gag"
@@ -48,16 +50,19 @@ var items = []string{
 	"Bug Egg",
 }
 
-var lastStockId int64
+var stockManager *gag.StockManager
 
-var lastSeedRestockTime int64
-var lastGearRestockTime int64
-var lastEggRestockTime int64
-var lastMerchantRestockTime int64
-var lastCosmeticRestockTime int64
-var lastEventRestockTime int64
+func stockUpdateCallback(sm *gag.StockManager) {
+	foundItems, err := sm.GetWantedStock(items)
+	if err != nil {
+		log.Printf("Failed to get wanted stock: %v", err)
+		return
+	}
 
-var firstRun = true
+	log.Printf("Found %d items in stock", len(foundItems))
+
+	notifyDesktop(foundItems, sm.GetStockTimeString())
+}
 
 func notify(message string) {
 	err := beeep.Alert("Grow a Garden", message, "")
@@ -66,44 +71,7 @@ func notify(message string) {
 	}
 }
 
-func checkStock(wantedItems []string) error {
-	stock, err := gag.GetGagStock()
-	if err != nil {
-		return err
-	}
-
-	if stock.LastApiFetch == lastStockId {
-		return nil
-	}
-
-	lastStockId = stock.LastApiFetch
-
-	timeStr := time.Unix(stock.LastApiFetch/1000, 0).Format(time.RFC822Z)
-
-	fmt.Printf("Refreshed stock at %s\n", timeStr)
-
-	foundItems, err := stock.CheckStock(wantedItems, gag.LastRestockTimes{
-		Seeds:     lastSeedRestockTime,
-		Gears:     lastGearRestockTime,
-		Eggs:      lastEggRestockTime,
-		Merchants: lastMerchantRestockTime,
-		Cosmetics: lastCosmeticRestockTime,
-		Event:     lastEventRestockTime,
-	}, firstRun)
-
-	if err != nil {
-		return err
-	}
-
-	firstRun = false
-
-	lastSeedRestockTime = stock.CategoryRefreshStatus.Seeds.LastRefresh
-	lastGearRestockTime = stock.CategoryRefreshStatus.Gears.LastRefresh
-	lastEggRestockTime = stock.CategoryRefreshStatus.Eggs.LastRefresh
-	lastMerchantRestockTime = stock.CategoryRefreshStatus.Merchants.LastRefresh
-	lastCosmeticRestockTime = stock.CategoryRefreshStatus.Cosmetics.LastRefresh
-	lastEventRestockTime = stock.CategoryRefreshStatus.Event.LastRefresh
-
+func notifyDesktop(foundItems []string, timeStr string) {
 	if len(foundItems) > 0 {
 		sb := strings.Builder{}
 		sb.WriteString("The following items are in stock:\n\n")
@@ -116,25 +84,6 @@ func checkStock(wantedItems []string) error {
 
 		notify(sb.String())
 	}
-
-	return nil
-}
-
-func routine(ctx context.Context) {
-	timer := time.NewTicker(1 * time.Minute)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-timer.C:
-			fmt.Println("Checking stock, next check at ", time.Now().Add(1*time.Minute).Format(time.RFC822Z))
-			err := checkStock(items)
-			if err != nil {
-				log.Printf("Failed to check stock: %v", err)
-			}
-		}
-	}
 }
 
 func init() {
@@ -142,17 +91,71 @@ func init() {
 }
 
 func main() {
-	fmt.Println("Starting Grow a Garden stock checker")
-
-	err := checkStock(items)
-	if err != nil {
-		log.Fatalf("Failed to check stock: %v", err)
-	}
+	log.Println("Starting Grow a Garden stock checker")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go routine(ctx)
+	log.Println("Starting stock manager")
+	stockManager = gag.NewStockManager(ctx, stockUpdateCallback)
+
+	log.Println("Starting server")
+	server := newServer()
+
+	server.GET("/wanted", func(w http.ResponseWriter, r *http.Request) {
+		items, err := stockManager.GetWantedStock(items)
+		if err != nil {
+			log.Printf("Failed to get wanted stock: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Found %d items in stock", len(items))
+
+		jsonBytes, err := json.Marshal(items)
+		if err != nil {
+			log.Printf("Failed to marshal items: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
+	})
+
+	server.GET("/images", func(w http.ResponseWriter, r *http.Request) {
+		stock := stockManager.GetStock()
+		images := stock.ImageData
+
+		jsonBytes, err := json.Marshal(images)
+		if err != nil {
+			log.Printf("Failed to marshal images: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
+	})
+
+	go func() {
+		log.Println("Starting server on port 8001")
+		err := server.server.ListenAndServe()
+		if err != nil {
+			log.Printf("Failed to start server: %v", err)
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		server.server.Shutdown(ctx)
+	}()
 
 	select {}
 }
