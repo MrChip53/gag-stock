@@ -52,16 +52,12 @@ var items = []string{
 
 var stockManager *gag.StockManager
 
-func stockUpdateCallback(sm *gag.StockManager) {
-	foundItems, err := sm.GetWantedStock(items)
-	if err != nil {
-		log.Printf("Failed to get wanted stock: %v", err)
-		return
-	}
+func stockUpdateCallback(sc gag.ShopContainer) {
+	foundItems := sc.GetWantedStock(items)
 
 	log.Printf("Found %d items in stock", len(foundItems))
 
-	notifyDesktop(foundItems, sm.GetStockTimeString())
+	notifyDesktop(foundItems, sc.GetTimeString())
 }
 
 func notify(message string) {
@@ -71,13 +67,13 @@ func notify(message string) {
 	}
 }
 
-func notifyDesktop(foundItems []string, timeStr string) {
+func notifyDesktop(foundItems []gag.Item, timeStr string) {
 	if len(foundItems) > 0 {
 		sb := strings.Builder{}
 		sb.WriteString("The following items are in stock:\n\n")
 
 		for _, item := range foundItems {
-			sb.WriteString(fmt.Sprintf("%s\n", item))
+			sb.WriteString(fmt.Sprintf("%s x %d\n", item.Name, item.Count))
 		}
 
 		sb.WriteString(fmt.Sprintf("Updated at %s\n", timeStr))
@@ -102,13 +98,27 @@ func main() {
 	log.Println("Starting server")
 	server := newServer()
 
-	server.GET("/wanted", func(w http.ResponseWriter, r *http.Request) {
-		items, err := stockManager.GetWantedStock(items)
+	server.GET("/all", func(w http.ResponseWriter, r *http.Request) {
+		sc := stockManager.GetShopContainer()
+		items := sc.GetAllItems()
+
+		jsonBytes, err := json.Marshal(items)
 		if err != nil {
-			log.Printf("Failed to get wanted stock: %v", err)
+			log.Printf("Failed to marshal items: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
+	})
+
+	server.GET("/wanted", func(w http.ResponseWriter, r *http.Request) {
+		sc := stockManager.GetShopContainer()
+		items := sc.GetWantedStock(items)
 
 		log.Printf("Found %d items in stock", len(items))
 
@@ -127,8 +137,7 @@ func main() {
 	})
 
 	server.GET("/images", func(w http.ResponseWriter, r *http.Request) {
-		stock := stockManager.GetStock()
-		images := stock.ImageData
+		images := stockManager.GetImageData()
 
 		jsonBytes, err := json.Marshal(images)
 		if err != nil {

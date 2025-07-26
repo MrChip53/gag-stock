@@ -28,6 +28,14 @@ func (s StockItemList) GetItem(name string) *StockItem {
 	return nil
 }
 
+func (s StockItemList) ToShopStock() ShopStock {
+	shopStock := make(ShopStock)
+	for _, item := range s {
+		shopStock[item.Name] = item.Value
+	}
+	return shopStock
+}
+
 // StockItem represents an item with a name and value
 type StockItem struct {
 	Name  string `json:"name"`
@@ -92,6 +100,78 @@ func (g *GagStockResponse) GetLastRestockTimes() LastRestockTimes {
 		Cosmetics: g.CategoryRefreshStatus.Cosmetics.LastRefresh,
 		Event:     g.CategoryRefreshStatus.Event.LastRefresh,
 	}
+}
+
+func roundToNearest5Minutes(ts int64) int64 {
+	const intervalMs = 5 * 60 * 1000 // 5 minutes in milliseconds
+	return ((ts + intervalMs/2) / intervalMs) * intervalMs
+}
+
+func (g GagStockResponse) ToShopContainer() ShopContainer {
+	sc := NewShopContainer()
+
+	sc.container["seeds"] = Shop{
+		Items:       g.Seeds.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Seeds.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Seeds),
+	}
+
+	sc.container["gears"] = Shop{
+		Items:       g.Gear.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Gears.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Gears),
+	}
+
+	sc.container["eggs"] = Shop{
+		Items:       g.Egg.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Eggs.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Eggs),
+	}
+
+	sc.container["merchants"] = Shop{
+		Items:       g.Merchants.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Merchants.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Merchants),
+	}
+
+	sc.container["cosmetics"] = Shop{
+		Items:       g.Cosmetics.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Cosmetics.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Cosmetics),
+	}
+
+	sc.container["event"] = Shop{
+		Items:       g.Event.ToShopStock(),
+		LastRefresh: g.CategoryRefreshStatus.Event.LastRefresh,
+		RestockTime: roundToNearest5Minutes(g.TimerCalculatedAt + g.RestockTimers.Event),
+	}
+
+	sc.container["night"] = Shop{
+		Items: g.Night.ToShopStock(),
+	}
+
+	sc.container["easter"] = Shop{
+		Items: g.Easter.ToShopStock(),
+	}
+
+	sc.lastApiFetch = g.LastApiFetch
+
+	return sc
+}
+
+func (g GagStockResponse) GetAllStock() []StockItem {
+	items := []StockItem{}
+
+	items = append(items, g.Seeds...)
+	items = append(items, g.Gear...)
+	items = append(items, g.Egg...)
+	items = append(items, g.Merchants...)
+	items = append(items, g.Cosmetics...)
+	items = append(items, g.Event...)
+	items = append(items, g.Night...)
+	items = append(items, g.Easter...)
+
+	return items
 }
 
 func (g GagStockResponse) CheckStock(wantedItems []string) ([]string, error) {

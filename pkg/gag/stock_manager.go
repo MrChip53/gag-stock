@@ -3,15 +3,50 @@ package gag
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 )
 
-type StockUpdateCallback func(sm *StockManager)
+type StockUpdateCallback func(sc ShopContainer)
+
+type ShopStock map[string]int
+
+type Shop struct {
+	Items       ShopStock
+	LastRefresh int64
+	RestockTime int64
+}
+
+func (s *Shop) GetItemCount(item string) int {
+	count, ok := s.Items[item]
+	if !ok {
+		return 0
+	}
+
+	return count
+}
+
+func (s *Shop) GetAllItems() []Item {
+	items := []Item{}
+
+	for item, count := range s.Items {
+		items = append(items, Item{
+			Name:        item,
+			Count:       count,
+			RestockTime: int(s.RestockTime),
+		})
+	}
+
+	return items
+}
 
 type StockManager struct {
-	cache *Cache[GagStockResponse]
+	mu sync.RWMutex
 
-	lastStockId int64
+	shopContainer ShopContainer
+	cb            StockUpdateCallback
+
+	lastApiFetch int64
 
 	lastSeedRestockTime     int64
 	lastGearRestockTime     int64
@@ -19,16 +54,15 @@ type StockManager struct {
 	lastMerchantRestockTime int64
 	lastCosmeticRestockTime int64
 	lastEventRestockTime    int64
+
+	imageData map[string]string
 }
 
 func NewStockManager(ctx context.Context, cb StockUpdateCallback) *StockManager {
-	sm := &StockManager{}
-
-	// todo: this is dumb, i'll fix it later
-	sm.cache = NewCache(func(stock GagStockResponse) {
-		log.Println("Stock updated")
-		cb(sm)
-	})
+	sm := &StockManager{
+		shopContainer: NewShopContainer(),
+		cb:            cb,
+	}
 
 	sm.refreshStock()
 
@@ -64,33 +98,11 @@ func (s *StockManager) refreshStock() error {
 		return err
 	}
 
-	if stock.LastApiFetch == s.lastStockId {
+	if stock.LastApiFetch == s.lastApiFetch {
 		return nil
 	}
 
-	s.lastStockId = stock.LastApiFetch
-
-	s.cache.Set(stock)
-
-	return nil
-}
-
-func (s *StockManager) GetStockTimeString() string {
-	return time.Unix(s.cache.Get().LastApiFetch/1000, 0).Format(time.RFC822Z)
-}
-
-func (s *StockManager) GetStock() GagStockResponse {
-	return s.cache.Get()
-}
-
-func (s *StockManager) GetWantedStock(wantedItems []string) ([]string, error) {
-	stock := s.cache.Get()
-
-	foundItems, err := stock.CheckStock(wantedItems)
-
-	if err != nil {
-		return nil, err
-	}
+	s.lastApiFetch = stock.LastApiFetch
 
 	s.lastSeedRestockTime = stock.CategoryRefreshStatus.Seeds.LastRefresh
 	s.lastGearRestockTime = stock.CategoryRefreshStatus.Gears.LastRefresh
@@ -99,7 +111,50 @@ func (s *StockManager) GetWantedStock(wantedItems []string) ([]string, error) {
 	s.lastCosmeticRestockTime = stock.CategoryRefreshStatus.Cosmetics.LastRefresh
 	s.lastEventRestockTime = stock.CategoryRefreshStatus.Event.LastRefresh
 
-	//notifyDesktop(foundItems, time.Unix(stock.LastApiFetch/1000, 0).Format(time.RFC822Z))
+	s.imageData = stock.ImageData
 
-	return foundItems, nil
+	sc := stock.ToShopContainer()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for shop, stock := range sc.container {
+		s.shopContainer.container[shop] = stock
+	}
+
+	s.cb(sc)
+
+	return nil
+}
+
+func (s *StockManager) GetStockTimeString() string {
+	return time.Unix(s.lastApiFetch/1000, 0).Format(time.RFC822Z)
+}
+
+func (s *StockManager) GetShopStock(shop string) Shop {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.shopContainer.container[shop]
+}
+
+func (s *StockManager) GetShopContainer() ShopContainer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	sc := NewShopContainer()
+	sc.lastApiFetch = s.shopContainer.lastApiFetch
+
+	for shop, stock := range s.shopContainer.container {
+		sc.container[shop] = stock
+	}
+
+	return sc
+}
+
+func (s *StockManager) GetImageData() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.imageData
 }

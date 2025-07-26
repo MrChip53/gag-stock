@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useGlobalStore } from './stores/global';
 import WantedItemsCard from './components/WantedItemsCard';
 import { getApiUrl } from './lib/utils';
+import AllItemsCard from './components/AllItemsCard';
 
 function App() {
   const { data: images, isLoading: isImagesLoading, isError: isImagesError } = useQuery<Record<string, string>>({
@@ -33,8 +34,13 @@ function App() {
   }
 
   return (
-    <div className="mx-8 my-4">
-      <WantedItemsCard />
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-row justify-center gap-4">
+        <WantedItemsCard />
+      </div>
+      <div className="flex flex-row justify-center gap-4">
+        <AllItemsCard />
+      </div>
     </div>
   )
 }
