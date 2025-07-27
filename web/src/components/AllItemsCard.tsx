@@ -24,8 +24,8 @@ function AllItemsCard() {
         {!isError && !isLoading && data.length === 0 && <p>No all items</p>}
         {!isError && !isLoading && data.length > 0 && (
           <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {data.map((item) => (
-              <li key={item.name} className="flex-1">
+            {data.sort((a, b) => a.name.localeCompare(b.name)).map((item) => (
+              <li key={`${item.stockTime}-${item.name}-${item.count}`} className="flex-1">
                 <StockListItem item={item} />
               </li>
             ))}

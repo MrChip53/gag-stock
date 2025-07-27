@@ -6,25 +6,27 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  sortingFns,
   useReactTable,
 } from '@tanstack/react-table'
-import { compareItems, rankItem } from '@tanstack/match-sorter-utils'
-
-import { makeData } from '../data/demo-table-data'
+import { rankItem } from '@tanstack/match-sorter-utils'
 
 import type {
   Column,
   ColumnDef,
   ColumnFiltersState,
   FilterFn,
-  SortingFn,
 } from '@tanstack/react-table'
 import type { RankingInfo } from '@tanstack/match-sorter-utils'
 
 import type { RootRoute } from '@tanstack/react-router'
 
-import type { Person } from '../data/demo-table-data'
+import { getApiUrl } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+
+type LastSeenItem = {
+  name: string
+  seen?: string
+}
 
 declare module '@tanstack/react-table' {
   interface FilterFns {
@@ -49,23 +51,7 @@ const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
   return itemRank.passed
 }
 
-// Define a custom fuzzy sort function that will sort by rank if the row has ranking information
-const fuzzySort: SortingFn<any> = (rowA, rowB, columnId) => {
-  let dir = 0
-
-  // Only sort by rank if the column has ranking information
-  if (rowA.columnFiltersMeta[columnId]) {
-    dir = compareItems(
-      rowA.columnFiltersMeta[columnId]?.itemRank!,
-      rowB.columnFiltersMeta[columnId]?.itemRank!,
-    )
-  }
-
-  // Provide an alphanumeric fallback for when the item ranks are equal
-  return dir === 0 ? sortingFns.alphanumeric(rowA, rowB, columnId) : dir
-}
-
-function TableDemo() {
+function Items() {
   const rerender = React.useReducer(() => ({}), {})[1]
 
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -73,39 +59,27 @@ function TableDemo() {
   )
   const [globalFilter, setGlobalFilter] = React.useState('')
 
-  const columns = React.useMemo<ColumnDef<Person, any>[]>(
+  const columns = React.useMemo<ColumnDef<LastSeenItem, any>[]>(
     () => [
       {
-        accessorKey: 'id',
+        accessorKey: 'name',
+        header: 'Name',
         filterFn: 'equalsString', //note: normal non-fuzzy filter column - exact match required
       },
       {
-        accessorKey: 'firstName',
-        cell: (info) => info.getValue(),
-        filterFn: 'includesStringSensitive', //note: normal non-fuzzy filter column - case sensitive
-      },
-      {
-        accessorFn: (row) => row.lastName,
-        id: 'lastName',
-        cell: (info) => info.getValue(),
-        header: () => <span>Last Name</span>,
-        filterFn: 'includesString', //note: normal non-fuzzy filter column - case insensitive
-      },
-      {
-        accessorFn: (row) => `${row.firstName} ${row.lastName}`,
-        id: 'fullName',
-        header: 'Full Name',
-        cell: (info) => info.getValue(),
-        filterFn: 'fuzzy', //using our custom fuzzy filter function
-        // filterFn: fuzzyFilter, //or just define with the function
-        sortingFn: fuzzySort, //sort by fuzzy rank (falls back to alphanumeric)
+        accessorKey: 'seen',
+        header: 'Last Seen',
+        filterFn: 'equalsString', //note: normal non-fuzzy filter column - case sensitive
       },
     ],
     [],
   )
 
-  const [data, setData] = React.useState<Person[]>(() => makeData(5_000))
-  const refreshData = () => setData((_old) => makeData(50_000)) //stress test
+  const { data, refetch } = useQuery<LastSeenItem[]>({
+    queryKey: ['items-last-seen'],
+    queryFn: () => fetch(getApiUrl('/last-seen')).then((res) => res.json()),
+    initialData: [],
+  })
 
   const table = useReactTable({
     data,
@@ -290,7 +264,7 @@ function TableDemo() {
           Force Rerender
         </button>
         <button
-          onClick={() => refreshData()}
+          onClick={() => refetch()}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
         >
           Refresh Data
@@ -360,7 +334,7 @@ function DebouncedInput({
 
 export default (parentRoute: RootRoute) =>
   createRoute({
-    path: '/demo/table',
-    component: TableDemo,
+    path: '/items',
+    component: Items,
     getParentRoute: () => parentRoute,
   })

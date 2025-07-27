@@ -110,6 +110,8 @@ func roundToNearest5Minutes(ts int64) int64 {
 func (g GagStockResponse) ToShopContainer() ShopContainer {
 	sc := NewShopContainer()
 
+	sc.lastSeen = g.LastSeen
+
 	sc.container["seeds"] = Shop{
 		Items:       g.Seeds.ToShopStock(),
 		LastRefresh: g.CategoryRefreshStatus.Seeds.LastRefresh,

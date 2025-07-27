@@ -14,6 +14,7 @@ import (
 )
 
 var items = []string{
+	// Seed Shop
 	"Mushroom",
 	"Pepper",
 	"Dragon Fruit",
@@ -25,7 +26,9 @@ var items = []string{
 	"Sugar Apple",
 	"Burning Bud",
 	"Giant Pinecone",
+	"Elder Strawberry",
 
+	// Gear Shop
 	"Basic Sprinkler",
 	"Advanced Sprinkler",
 	"Godly Sprinkler",
@@ -35,6 +38,7 @@ var items = []string{
 	"Tanning Mirror",
 	"Friendship Pot",
 
+	// Zen Shop
 	"Zen Seed Pack",
 	"Zen Egg",
 	"Hot Spring",
@@ -42,7 +46,10 @@ var items = []string{
 	"Koi",
 	"Spiked Mango",
 	"Pet Shard Tranquil",
+	"Pet Shard Corrupted",
+	"Raiju",
 
+	// Egg Shop
 	"Common Summer Egg",
 	"Rare Summer Egg",
 	"Mythical Egg",
@@ -54,8 +61,6 @@ var stockManager *gag.StockManager
 
 func stockUpdateCallback(sc gag.ShopContainer) {
 	foundItems := sc.GetWantedStock(items)
-
-	log.Printf("Found %d items in stock", len(foundItems))
 
 	notifyDesktop(foundItems, sc.GetTimeString())
 }
@@ -98,6 +103,24 @@ func main() {
 	log.Println("Starting server")
 	server := newServer()
 
+	server.GET("/last-seen", func(w http.ResponseWriter, r *http.Request) {
+		sc := stockManager.GetShopContainer()
+		lastSeen := sc.GetLastSeenItems()
+
+		jsonBytes, err := json.Marshal(lastSeen)
+		if err != nil {
+			log.Printf("Failed to marshal last seen: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(jsonBytes)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
+	})
+
 	server.GET("/all", func(w http.ResponseWriter, r *http.Request) {
 		sc := stockManager.GetShopContainer()
 		items := sc.GetAllItems()
@@ -119,8 +142,6 @@ func main() {
 	server.GET("/wanted", func(w http.ResponseWriter, r *http.Request) {
 		sc := stockManager.GetShopContainer()
 		items := sc.GetWantedStock(items)
-
-		log.Printf("Found %d items in stock", len(items))
 
 		jsonBytes, err := json.Marshal(items)
 		if err != nil {

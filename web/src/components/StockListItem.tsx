@@ -12,10 +12,11 @@ function formatCountdown(ms: number): string {
 
 function StockListItem({ item }: { item: StockItem }) {
   const { images: cachedImages } = useGlobalStore();
-  // item.restockTime is now a unix epoch target date (ms)
-  // Calculate the time between now and then for the countdown
+
   const getRemaining = () => Math.max(item.restockTime - Date.now(), 0);
   const [remaining, setRemaining] = useState(getRemaining());
+
+  const [purchased, setPurchased] = useState(false);
 
   useEffect(() => {
     if (item.restockTime <= 0) {
@@ -27,40 +28,65 @@ function StockListItem({ item }: { item: StockItem }) {
       setRemaining(getRemaining());
     }, 250);
     return () => clearInterval(interval);
-    // Only restart timer if restockTime or item changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.restockTime, item.name]);
 
+  const handleTogglePurchased = () => {
+    setPurchased((prev) => !prev);
+  };
+
   return (
     <div
-      className="
-          flex items-center gap-4 py-2 px-4
-          rounded-xl
-          bg-white/20 backdrop-blur-md
-          border border-white/30
-          shadow-lg
-          transition-transform duration-200
-          hover:scale-105
-          hover:shadow-[0_0_16px_4px_rgba(99,102,241,0.4)]
-          outline outline-2 outline-transparent
-          hover:outline-blue-400/60
-          relative
-        "
+      className={`
+        flex items-center gap-4 py-2 px-4
+        rounded-xl
+        ${purchased ? "bg-green-300/80" : "bg-white/20"}
+        backdrop-blur-md
+        border border-white/30
+        shadow-lg
+        transition-transform duration-200
+        hover:scale-105
+        hover:shadow-[0_0_16px_4px_rgba(99,102,241,0.4)]
+        outline outline-2 outline-transparent
+        hover:outline-blue-400/60
+        relative
+        cursor-pointer
+      `}
+      onClick={handleTogglePurchased}
+      tabIndex={0}
+      role="button"
+      aria-pressed={purchased}
+      title={purchased ? "Mark as not purchased" : "Mark as purchased"}
     >
-      {/* Countdown timer in upper right if restockTime > 0 */}
       {item.restockTime > 0 && (
-        <span
-          className="
-              absolute top-2 right-3
-              text-xs font-semibold text-blue-700 bg-white/80 px-2 py-0.5 rounded
-              shadow
-              select-none
-              z-10
-            "
-          title="Restock countdown"
-        >
-          {formatCountdown(remaining)}
-        </span>
+        remaining > 0 ? (
+          <span
+            className="
+                absolute bottom-2 right-3
+                text-xs font-semibold text-blue-700 bg-white/80 px-2 py-0.5 rounded
+                shadow
+                select-none
+                z-10
+              "
+            title="Restock countdown"
+          >
+            {formatCountdown(remaining)}
+          </span>
+        ) : (
+          <span
+            className="
+                absolute bottom-2 right-3
+                flex items-center justify-center
+                text-xs font-semibold text-white bg-red-600/80 px-2 py-0.5 rounded
+                shadow
+                select-none
+                z-10
+              "
+            title="Expired"
+          >
+            EXPIRED
+          </span>
+        )
       )}
       {cachedImages[item.name] ? (
         <img
@@ -82,14 +108,14 @@ function StockListItem({ item }: { item: StockItem }) {
         >
           {item.name.trim().split(/\s+/).length > 1
             ? item.name
-              .trim()
-              .split(/\s+/)
-              .map(word => word[0]?.toUpperCase() || '')
-              .join('')
+                .trim()
+                .split(/\s+/)
+                .map(word => word[0]?.toUpperCase() || '')
+                .join('')
             : item
-              .name.trim()
-              .slice(0, 2)
-              .toUpperCase()}
+                .name.trim()
+                .slice(0, 2)
+                .toUpperCase()}
         </div>
       )}
       <div className="flex flex-1 flex-col gap-1">

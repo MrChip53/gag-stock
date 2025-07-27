@@ -33,6 +33,7 @@ func (s *Shop) GetAllItems() []Item {
 		items = append(items, Item{
 			Name:        item,
 			Count:       count,
+			StockTime:   int(s.LastRefresh),
 			RestockTime: int(s.RestockTime),
 		})
 	}
@@ -113,16 +114,12 @@ func (s *StockManager) refreshStock() error {
 
 	s.imageData = stock.ImageData
 
-	sc := stock.ToShopContainer()
+	s.shopContainer = stock.ToShopContainer()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for shop, stock := range sc.container {
-		s.shopContainer.container[shop] = stock
-	}
-
-	s.cb(sc)
+	s.cb(s.shopContainer)
 
 	return nil
 }
@@ -142,14 +139,7 @@ func (s *StockManager) GetShopContainer() ShopContainer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	sc := NewShopContainer()
-	sc.lastApiFetch = s.shopContainer.lastApiFetch
-
-	for shop, stock := range s.shopContainer.container {
-		sc.container[shop] = stock
-	}
-
-	return sc
+	return s.shopContainer
 }
 
 func (s *StockManager) GetImageData() map[string]string {

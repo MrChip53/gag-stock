@@ -8,8 +8,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import TableDemo from './routes/demo.table.tsx'
-import TanStackQueryDemo from './routes/demo.tanstack-query.tsx'
+import Items from './routes/items.tsx'
 
 import Header from './components/Header'
 
@@ -42,8 +41,7 @@ const indexRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  TableDemo(rootRoute),
-  TanStackQueryDemo(rootRoute),
+  Items(rootRoute),
 ])
 
 const router = createRouter({
