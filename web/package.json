@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
-    "build": "vite build && tsc && cp -r dist/* ../dist",
+    "build": "vite build && tsc && cpx dist/** ../dist",
     "serve": "vite preview",
     "test": "vitest run",
     "lint": "eslint",
@@ -41,6 +41,7 @@
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "cpx": "^1.5.0",
     "jsdom": "^26.0.0",
     "prettier": "^3.5.3",
     "typescript": "^5.7.2",
